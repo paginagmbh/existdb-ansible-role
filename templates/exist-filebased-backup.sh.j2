@@ -23,10 +23,12 @@ LOGFILE=`mktemp`
 SYSLOG=
 export LOGFILE SYSLOG
 
-. ${INST_DIR}/contrib/common-shfuncs.sh
-
 INSTNAME=$1
 INSTUSER=$2
+EXIST_BASEDIR={{ exist_home }}
+INST_DIR=${EXIST_BASEDIR}/${INSTNAME}
+
+. ${INST_DIR}/contrib/common-shfuncs.sh
 
 if [ -z "$INSTNAME" ]; then
     logerr 1 "ERROR: no instance name specified, exiting"
@@ -35,10 +37,8 @@ if [ -z "$INSTUSER" ]; then
     logerr 1 "ERROR: no instance user specified, exiting"
 fi
 
-EXIST_BASEDIR={{ exist_home }}
 BACKUP_DIRNAME=${INSTNAME}.`date +'%Y%m%d%H%M'`
 BACKUP_DIR=${EXIST_BASEDIR}/backup/${INSTUSER}/${BACKUP_DIRNAME}
-INST_DIR=${EXIST_BASEDIR}/${INSTNAME}
 INIT_FILE=/etc/init.d/${INSTNAME}
 SUPP_FILES="\
  /etc/systemd/system/${INSTNAME}.service \
