@@ -50,7 +50,7 @@ if psexist -S $INSTNAME | grep -q $INSTNAME; then
     logmsg "stopping running eXist instance \"${INSTNAME}\""
     service ${INSTNAME} stop
     # check again to verify it is really dead, just to be sure
-    sleep 3
+    sleep {{ exist_shutdown_timeout }}
     if psexist -S $INSTNAME | grep -q $INSTNAME; then
 	logerr 2 "ERROR: eXist instance \"${INSTNAME}\" still running after stop command"
     fi

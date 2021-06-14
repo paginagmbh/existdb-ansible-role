@@ -189,6 +189,10 @@ directory `exist_local_archive_dir` on the Ansible host.
 Whether to create a backup when installing a different eXist version, and
 whether to restore the previous data directory in the new installation.
 
+    exist_shutdown_timeout: 3
+
+How long to wait for exist to shut down (e. g. when performing backup-related tasks).
+
     exist_startup_timeout: 300
 
 How long to wait for exist to come up before raising an error (because we need
