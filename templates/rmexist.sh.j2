@@ -16,7 +16,7 @@ fi
 BASEDIR={{ exist_home }}
 
 echo Stop instance $INSTNAME if it is running
-psexist -S $INSTNAME | grep -q $INSTNAME && service $INSTNAME stop
+psexist -S $INSTNAME | grep -q "instance: $INSTNAME" && service $INSTNAME stop
 
 echo Deleting instance $INSTNAME and support files
 rm -rf \
