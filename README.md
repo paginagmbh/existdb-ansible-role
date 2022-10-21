@@ -3,7 +3,7 @@
 This is an Ansible role to install and configure eXist DB
 (http://exist-db.org/).
 
-The current version is 1.0 (Aug 15 2021). This release supports
+The current version is 1.1 (Dec 13 2021). This release supports
 **eXist-db 5.x** and **multiple eXist-db instances** on a single host.
 For a list of changes since the public beta release, please see
 RELEASE_NOTES.md.
@@ -132,7 +132,7 @@ Special memory settings suited for high-load installations: `exist_mem_g1gc_paus
     exist_major_version: 4
 
 You need to explicitly specify whether you are going to install an eXist-db 4.x
-or 5.x version. There is currently no auto-detection.
+or higher version. There is currently no auto-detection.
 
     exist_install_method: source
 
