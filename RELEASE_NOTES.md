@@ -1,12 +1,10 @@
-# TODO
-
-* review backup
-* revision detection in src install
-* custom xar install
-
 # Current Version
 
-Version 1.0-SNAPSHOT (Jun 11 2020)
+Version 1.0 (Aug 15 2021)
+
+This version has been applied to various eXist-db instances that are actively
+in production, including more complex setups that use production/staging/dev
+environments or data replication for high availability.
 
 ## New Features
 
@@ -14,9 +12,11 @@ Version 1.0-SNAPSHOT (Jun 11 2020)
 * add multi-instance support (multiple eXist-db on the same host)
 * improve memory and GC parameter configuration
 * improve Jetty port and IP address configuration
+* very flexible pre-installation of xar packages
 
 ## Fixes and Improvements
 
+* [bugfix] disable exist_webxml_from_template by default (thanks @sermo-de-arboribus)
 * provide installation documentation
 * cleanup exist_adminpass and exist_userpass_map formats
 * add syslog support

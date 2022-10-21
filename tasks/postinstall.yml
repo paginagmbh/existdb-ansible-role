@@ -184,6 +184,7 @@
     - exist-filebased-restore.sh
     - exist-clientside-backup.sh
     - exist-serverside-backup.sh
+    - common-shfuncs.sh
   tags:
     - config
 
