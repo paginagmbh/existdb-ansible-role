@@ -81,6 +81,9 @@ exist_restore_prevdata: yes
 # how long to wait for exist to come up before raising an error
 exist_startup_timeout: 300
 
+# how long to wait for exist to shut down (e.g. when running backup-related tasks)
+exist_shutdown_timeout: 3
+
 # which config files to generate from Ansible
 exist_wrapperconf_from_template: yes
 exist_jettyconf_from_template: yes
