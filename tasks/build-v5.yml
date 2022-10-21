@@ -1,0 +1,62 @@
+---
+#- name: Debug
+#  debug:
+#    msg: "PATH for user {{ exist_instuser }}: {{ ansible_env.PATH }}"
+
+- name: Build/rebuild eXist 5.x
+  become_user: "{{ exist_instuser }}"
+  # java.io.tmpdir needed to work around an atomic move across filesystems
+  # skipTest because some tests fail and we're not doing dev here
+  # do not try to build Mac images, needs HFS utils, not avail everywhere
+  shell: "MAVEN_OPTS='-Djava.io.tmpdir={{ exist_home }}/tmp' mvn clean package {{ exist_mvn_options }} >build.log 2>&1"
+  args:
+    chdir: "{{ exist_srcpath }}"
+  tags:
+    - install
+    - src-install
+    - exist5
+
+- name: Locate compiled eXist archive
+  find:
+    paths: "{{ exist_srcpath }}/exist-distribution/target"
+    patterns: "exist-distribution*unix.tar.bz2"
+  register: compiled_archive
+  tags:
+    - install
+    - src-install
+    - exist5
+
+- name: Debug
+  debug:
+    msg: "Found {{ compiled_archive.files[0].path | default('NOTHING') }}"
+  tags:
+    - install
+    - src-install
+    - exist5
+
+- name: Copy compiled eXist archive to archive directory on the local Ansible host
+  copy:
+    src: "{{ compiled_archive.files[0].path }}"
+    dest: "{{ exist_home }}/tmp/"
+    remote_src: yes
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  tags:
+    - install
+    - src-install
+    - exist5
+
+- name: Install exist archive
+  unarchive:
+    src: "{{ compiled_archive.files[0].path }}"
+    dest: "{{ exist_home }}"
+    remote_src: yes
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    #creates: "{{ exist_path }}/etc/conf.xml"  # 5.x
+    extra_opts: [ '--transform=s:^[^/]\+:{{ exist_instname }}:;' ]
+  when: not exist_is_installed or exist_replace_installation
+  tags:
+    - install
+    - src-install
+    - exist5

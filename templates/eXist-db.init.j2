@@ -5,28 +5,40 @@
 # Required-Stop:
 # Default-Start:  2 3 4 5
 # Default-Stop: 0 1 6
-# Short-Description: yajsw wrapper for eXist-db Native XML Database
-# Description: eXist-db Database Server
+# Short-Description: {{ exist_instname }}
+# Description: eXist-db Database Server (instance {{ exist_instname }})
 ### END INIT INFO
-# config: {{ exist_path }}/tools/yajsw/conf/wrapper.conf
-# pidfile: {{ exist_path }}/wrapper.eXist-db.pid
-# apppidfile: {{ exist_path }}/wrapper.java.eXist-db.pid
-#-----------------------------------------------------------------------------
-# YAJSW sh script template.  Suitable for starting and stopping
-#  wrapped daemon on POSIX platforms.
-#-----------------------------------------------------------------------------
+
+# name of this eXist-db instance
+EXIST_NAME={{ exist_instname }}
+# user that runs this eXist-db instance
+EXIST_USER={{ exist_instuser }}
+# path to this eXist-db instance
+EXIST_DIR={{ exist_path }}
+
+# custom Java options for eXist-db can be defined in file
+#   ${EXIST_DIR}/contrib/exist.java.options
+# to pass custom Java command line flags (mem, GC settings etc)
+
 
 status() {
-     {{ ansible_env.JAVA_HOME }}/bin/java -Dwrapper.pidfile={{ exist_path }}/wrapper.eXist-db.pid -Dwrapper.service=true -Dwrapper.visible=false -Djna_tmpdir={{ exist_home }}/tmp -jar {{ exist_path }}/tools/yajsw/wrapper.jar -qx {{ exist_path }}/tools/yajsw/conf/wrapper.conf
+    if pgrep -lfu ${EXIST_USER} "${EXIST_NAME} org.codehaus" >/dev/null; then
+        echo running
+        exit 0
+    else
+        echo stopped
+        exit 1
+    fi
+}
+
+startit() {
+    echo "Starting eXist-db ..."
+    sudo -b -u ${EXIST_USER} nohup ${EXIST_DIR}/contrib/service.sh >${EXIST_DIR}/logs/startup.log 2>&1
 }
 
 stopit() {
     echo "Stopping eXist-db ..."
-    {{ ansible_env.JAVA_HOME }}/bin/java -Dwrapper.pidfile={{ exist_path }}/wrapper.eXist-db.pid -Dwrapper.service=true -Dwrapper.visible=false -Djna_tmpdir={{ exist_home }}/tmp -jar {{ exist_path }}/tools/yajsw/wrapper.jar -px {{ exist_path }}/tools/yajsw/conf/wrapper.conf
-}
-startit() {
-    echo "Starting eXist-db ..."
-    sudo -u {{ exist_user }} {{ ansible_env.JAVA_HOME }}/bin/java -Dwrapper.pidfile={{ exist_path }}/wrapper.eXist-db.pid -Dwrapper.service=true -Dwrapper.visible=false -Djna_tmpdir={{ exist_home }}/tmp -jar {{ exist_path }}/tools/yajsw/wrapper.jar -tx {{ exist_path }}/tools/yajsw/conf/wrapper.conf
+    pkill -fu ${EXIST_USER} "${EXIST_NAME} org.codehaus"
 }
 
 

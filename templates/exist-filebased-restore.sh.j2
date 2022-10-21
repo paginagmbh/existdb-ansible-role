@@ -1,0 +1,95 @@
+#!/bin/sh
+
+usage() {
+    cat <<EOF
+Usage: $0 [-K] backupdir instance_name instance_user
+   eg: $0 exist.201801151508 exist50 existdb
+
+Options:
+ -d  search backups below this directory (default ${BACKUP_DIR})
+ -f  force, skip "proceed?" question
+ -h  help (this text)
+ -i  backup the named exist-db instance (default ${INSTNAME})
+ -K  keep eXist instance dir from before restore (gets deleted by default)
+ -s  log to syslog
+EOF
+}
+
+# defaults
+INSTNAME={{ exist_instname }}
+EXIST_BASEDIR={{ exist_home }}
+INSTUSER={{ exist_instuser }}
+BACKUP_DIR=${EXIST_BASEDIR}/backup
+TYPE=rsync
+FORCE=
+VERBOSE=
+SYSLOG=
+LOGFILE=`mktemp`
+export VERBOSE SYSLOG LOGFILE
+
+trap "rm -rf $LOGFILE" EXIT
+
+while getopts "d:fhi:Kst:u:v" PARAM; do
+    case "${PARAM}" in
+	d) BACKUP_DIR=$OPTARG;;
+	f) FORCE=yes;;
+	i) INSTNAME=$OPTARG;;
+	K) KEEP_PREVIOUS=yes;;
+	s) SYSLOG=yes;;
+	t) TYPE=$OPTARG;;
+	u) INSTUSER=$OPTARG;;
+	v) VERBOSE=yes;;
+	*) usage; exit 1;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+SCRIPT_DIR=`dirname $0`
+. ${SCRIPT_DIR}/common-shfuncs.sh
+
+if [ -d "${BACKUP_DIR}/${INSTNAME}" -a \
+     -d "${BACKUP_DIR}/${INSTNAME}/${INSTNAME}" -a \
+     "$TYPE" = rsync ]; then
+    logmsg "Found rsync backup in ${BACKUP_DIR}/${INSTNAME}"
+elif [ -f ${BACKUP_DIR}/${INSTNAME}.tgz -a "$TYPE" = tgz ]; then
+    logmsg "Found tgz backup ${BACKUP_DIR}/${INSTNAME}.tgz"
+else
+    logerr 1 "No backup found"
+fi
+
+shutdown_exist
+
+# rename current eXist installation dir
+if [ -d "${EXIST_BASEDIR}/${INSTNAME}" ]; then
+    logmsg "Moving current exist-db dir to \"${INSTNAME}.BEFORE_RESTORE\""
+    mv ${EXIST_BASEDIR}/${INSTNAME} ${EXIST_BASEDIR}/${INSTNAME}.BEFORE_RESTORE
+fi
+
+if [ "$TYPE" = rsync ]; then
+    logmsg "Restoring from rsync dir ${BACKUP_DIR}/${INSTNAME}/${INSTNAME}"
+    rsync -a ${BACKUP_DIR}/${INSTNAME}/${INSTNAME} ${EXIST_BASEDIR}
+    [ -f ${BACKUP_DIR}/${INSTNAME}/${INSTNAME}.fact ] && \
+	rsync -a ${BACKUP_DIR}/${INSTNAME}/${INSTNAME}.fact /etc/ansible/facts.d/
+    [ -f ${BACKUP_DIR}/${INSTNAME}/${INSTNAME}.service ] && \
+	rsync -a ${BACKUP_DIR}/${INSTNAME}/${INSTNAME}.service /etc/systemd/system/
+elif [ "$TYPE" = tgz ]; then
+    logmsg "Restoring from tgz file ${BACKUP_DIR}/${INSTNAME}.tgz"
+    tar zxf ${BACKUP_DIR}/${INSTNAME}.tgz -C ${EXIST_BASEDIR} ${INSTNAME}
+    tar zxf ${BACKUP_DIR}/${INSTNAME}.tgz -C / etc
+else
+    :
+fi
+
+# remove eXist version from before the restore, unless KEEP_PREVIOUS
+if [ -z "$KEEP_PREVIOUS" ]; then
+    logmsg "Removing previous eXist version from before the restore"
+    rm -rf ${EXIST_BASEDIR}/${INSTNAME}.BEFORE_RESTORE
+fi
+
+# move restore logfile to eXist log dir
+[ -n "$LOGFILE" ] \
+    && mv $LOGFILE ${EXIST_BASEDIR}/${INSTNAME}/logs/restore-${TYPE}.log \
+    && chown ${INSTUSER} ${EXIST_BASEDIR}/${INSTNAME}/logs/restore-${TYPE}.log
+
+# reload systemd, in case systemd service file was recreated
+systemctl daemon-reload

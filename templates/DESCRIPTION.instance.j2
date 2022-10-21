@@ -1,0 +1,60 @@
+{{ exist_instdescription }}
+
+This setup was created using the eXist-db Ansible role.
+
+* instance name:     {{ exist_instname }}
+* instance user:     {{ exist_instuser }}
+* installation dir:  {{ exist_path }}
+* installed version: {{ ansible_local[exist_instname]['exist_version'] }}
+{% if exist_http_port == 0 %}
+* HTTP port:         DISABLED
+{% else %}
+{% if exist_http_host is defined %}
+* HTTP port:         {{ exist_http_host }}:{{ exist_http_port }}
+{% else %}
+* HTTP port:         *:{{ exist_http_port }}
+{% endif %}
+{% endif %}
+{% if exist_ssl_port == 0 %}
+* HTTPS port:        DISABLED
+{% else %}
+{% if exist_ssl_host is defined %}
+* HTTPS port:        {{ exist_http_host }}:{{ exist_ssl_port }}
+{% else %}
+* HTTPS port:        *:{{ exist_ssl_port }}
+{% endif %}
+{% endif %}
+* Log dir:           {{ exist_logdir }}
+
+## Starting/Stopping the Instance
+
+Use the commands below to manage your eXist-db instance from the shell.
+
+```
+{% if ansible_service_mgr == "systemd" %}
+    sudo systemctl start {{ exist_instname }}
+    sudo systemctl stop {{ exist_instname }}
+    sudo systemctl status {{ exist_instname }}
+    sudo systemctl restart {{ exist_instname }}
+{% else %}
+    sudo service {{ exist_instname }} start
+    sudo service {{ exist_instname }} stop
+    sudo service {{ exist_instname }} status
+    sudo service {{ exist_instname }} restart
+{% endif %}
+```
+
+## Controlling Java Options Passed to the eXist-db Process
+
+{% if exist_major_version == 5 %}
+Edit {{ exist_path }}/contrib/exist.java.options and restart exist.
+{% else %}
+Edit {{ exist_path }}/{{ exist_confpaths[exist_major_version]['wrapper_conf'] }}
+and restart exist.
+{% endif %}
+
+## Miscellaneous
+
+{% if exist_fdset_enable | bool %}
+The file descriptor limits for user "{{ exist_instuser }}" were raised to {{ exist_fdsoft_limit }}.
+{% endif %}

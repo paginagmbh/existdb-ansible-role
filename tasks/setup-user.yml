@@ -1,51 +1,104 @@
+# NOTE: when running multiple eXist-db instances on the same host, we
+# distinguish between the "eXist-db system user" (var "exist_user") providing
+# common filesystem resources to all instances, and the user actually
+# running an eXist-db instance (var "exist_instuser"). This means in addition
+# to the "existdb" system user, another user account gets created.
+#
+# This is not needed for single instance scenarios, as long as variable
+# "exist_instuser" is left at its default value.
 ---
-## setup exist user/group/home; ensure login and SSH are disabled
+## setup system exist user/group/home; ensure login and SSH are disabled
 
-- name: Ensure exist group is present
+- name: Ensure exist system group is present
   group:
-    name: "{{ exist_group }}"
+    name: '{{ exist_group }}'
+  tags:
+    - preinstall
+    - sysuser
 
-- name: Ensure exist user is present
+- name: Ensure exist system user is present
   user:
-    name: "{{ exist_user }}"
-    group: "{{ exist_group }}"
-    home: "{{ exist_home }}"
-    password: "*"
+    name: '{{ exist_user }}'
+    group: '{{ exist_group }}'
+    home: '{{ exist_home }}'
+    password: '*'
+  tags:
+    - preinstall
+    - sysuser
 
-- name: Ensure exist homedir owned by exist user/group
+- name: Ensure exist system dir is owned by exist system user/group
   file:
-    path: "{{ exist_home }}"
+    path: '{{ exist_home }}'
     state: directory
-    owner: "{{ exist_user }}"
-    group: "{{ exist_group }}"
-    mode: 0751
+    owner: '{{ exist_user }}'
+    group: '{{ exist_group }}'
+    mode: 0771
+  tags:
+    - preinstall
+    - sysuser
 
-- name: Ensure exist homedir does not have .ssh/authorized_keys
+- name: Ensure exist system dir does not have .ssh/authorized_keys
   file:
-    path: "{{ exist_home }}/.ssh/authorized_keys"
+    path: '{{ exist_home }}/.ssh/authorized_keys'
     state: absent
+  tags:
+    - preinstall
+    - sysuser
 
-## increase file descriptor limits for eXist user
+## setup exist instance user
+
+- name: Ensure exist instance user is present
+  user:
+    name: '{{ exist_instuser }}'
+    group: '{{ exist_group }}'
+    password: "{{ exist_adminpass[inventory_hostname][exist_instname] | password_hash('sha512') }}"
+  when: exist_instuser != exist_user and not exist_instuser in exist_prohibit_usermod
+  tags:
+    - preinstall
+    - instuser
+
+- name: Create sudoers.d fragment for instance user
+  template:
+    src: sudoers.instuser.j2
+    dest: '/etc/sudoers.d/{{ exist_instuser }}'
+    mode: 0440
+  when:
+    - exist_instuser != exist_user
+    - not exist_instuser in exist_prohibit_usermod
+  tags:
+    - preinstall
+    - instuser
+
+## increase file descriptor limits for exist instance user
 
 - name: Setup file descriptor limits for user exist from template
   template:
     src: limits.exist.j2
-    dest: /etc/security/limits.d/exist.conf
-  when: exist_fdset_enable == True
+    dest: '/etc/security/limits.d/{{ exist_instuser }}.conf'
+  when: exist_fdset_enable|bool is sameas true
+  tags:
+    - preinstall
+    - instuser
 
 - name: Ensure limits get applied by PAM (Debian family)
   lineinfile:
-    path: "/etc/pam.d/{{ item }}"
+    path: '/etc/pam.d/{{ item }}'
     regexp: 'session\s+required\s+pam_limits.so'
-    line: "session  required  pam_limits.so"
+    line: 'session  required  pam_limits.so'
   with_items:
     - login
     - su
-  when: exist_fdset_enable == True and ansible_os_family == "Debian"
+  when: exist_fdset_enable|bool is sameas true and ansible_os_family == "Debian"
+  tags:
+    - preinstall
+    - instuser
 
 - name: Ensure limits get applied by PAM (Redhat family)
   lineinfile:
     name: /etc/pam.d/system-auth
     regexp: 'session\s+required\s+pam_limits.so'
-    line: "session  required  pam_limits.so"
-  when: exist_fdset_enable == True and ansible_os_family == "RedHat"
+    line: 'session  required  pam_limits.so'
+  when: exist_fdset_enable|bool is sameas true and ansible_os_family == "RedHat"
+  tags:
+    - preinstall
+    - instuser

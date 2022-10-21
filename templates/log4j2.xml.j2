@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?><Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <Properties>
-        <Property name="logs">webapp/WEB-INF/logs</Property>
+        <Property name="logs">{{ exist_logdir }}</Property>
         <Property name="rollover.max.size">10MB</Property>
         <Property name="rollover.max">14</Property>
         <Property name="rollover.file.pattern">%d{yyyyMMddHHmmss}</Property>
@@ -14,7 +15,7 @@
         </Console>
 
 {% if exist_syslog_enable %}
-        <Syslog name="syslog" host="{{ syslog_loghost }}" port="514" protocol="UDP"
+        <Syslog name="syslog" host="{{ exist_syslog_loghost }}" port="514" protocol="UDP"
                 appName="exist" facility="LOCAL1" charset="ISO-8859-1">
         </Syslog>
 {% endif %}

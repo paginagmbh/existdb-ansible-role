@@ -1,9 +1,9 @@
 #!/bin/sh
 
-ex_instance="{{ exist_suffix }}"
 ex_path="{{ exist_path }}"
 
 # defaults
+ex_description=
 ex_running=false
 ex_installed=false
 ex_version=
@@ -12,8 +12,12 @@ ex_branch=
 ex_revision=
 ex_jmxtoken=
 ex_gitsrc=false
+ex_http_port={{ exist_http_port }}
+ex_ssl_port={{ exist_ssl_port }}
 
-if [ -d "$ex_path" -a -f $ex_path/exist.jar ]; then
+
+{% if exist_major_version == 4 %}
+if [ -d "$ex_path" -a -f $ex_path/exist.jar -a -f $ex_path/VERSION.txt ]; then
     ex_installed=true
     ex_version=`grep project.version $ex_path/VERSION.txt | sed -e 's/project.version=//;'`
     ex_built=`grep project.built $ex_path/VERSION.txt | sed -e 's/project.built=//;'`
@@ -24,27 +28,52 @@ if [ -d "$ex_path" -a -f $ex_path/exist.jar ]; then
     fi
 fi
 
+if pgrep -lf '{{ exist_instname }}.start.jar' >/dev/null; then
+    ex_running=true
+fi
+
 if [ -d "$ex_path/.git" ]; then
     ex_gitsrc=true
 fi
+{% else %}
+if [ -f $ex_path/etc/conf.xml ]; then
+    ex_installed=true
+    ex_version=`grep product-version $ex_path/etc/system.properties | sed -e 's/product-version=//;'`
+    ex_built=`grep product-build $ex_path/etc/system.properties | sed -e 's/product-build=//;'`
+    ex_branch=`grep git-branch $ex_path/etc/system.properties | sed -e 's/git-branch=//;'`
+    ex_revision=`grep git-commit $ex_path/etc/system.properties | sed -e 's/git-commit=//;'`
+    if [ -f $ex_path/data/jmxservlet.token ]; then
+	ex_jmxtoken=`grep '^token=' $ex_path/data/jmxservlet.token | sed -e 's/token=//;'`
+    fi
+fi
 
-if pgrep -lf 'exist.start.jar' >/dev/null; then
+if [ -f $ex_path/contrib/DESCRIPTION.md ]; then
+    ex_description=`head -1 $ex_path/contrib/DESCRIPTION.md 2>/dev/null`
+fi
+
+if pgrep -lfu {{ exist_instuser }} '{{ exist_instname }} org.codehaus' >/dev/null; then
     ex_running=true
 fi
+
+if [ -d "${ex_path}-v5source/.git" ]; then
+    ex_gitsrc=true
+fi
+{% endif %}
 
 
 cat <<EOF
 {
-    "${ex_instance}": {
-        "exist_installed": ${ex_installed},
-        "exist_path": "${ex_path}",
-        "exist_running": ${ex_running},
-        "exist_version": "${ex_version}",
-        "exist_build_date": "${ex_built}",
-        "exist_branch": "${ex_branch}",
-        "exist_revision": "${ex_revision}",
-        "exist_jmxtoken": "${ex_jmxtoken}",
-        "exist_gitsrc": ${ex_gitsrc}
-    }
+    "exist_installed": ${ex_installed},
+    "exist_description": "${ex_description}",
+    "exist_path": "${ex_path}",
+    "exist_running": ${ex_running},
+    "exist_version": "${ex_version}",
+    "exist_build_date": "${ex_built}",
+    "exist_branch": "${ex_branch}",
+    "exist_revision": "${ex_revision}",
+    "exist_jmxtoken": "${ex_jmxtoken}",
+    "exist_gitsrc": ${ex_gitsrc},
+    "exist_http_port": ${ex_http_port},
+    "exist_ssl_port": ${ex_ssl_port}
 }
 EOF

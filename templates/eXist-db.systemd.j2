@@ -4,12 +4,12 @@ Documentation=http://exist-db.org/exist/apps/doc/
 After=syslog.target
 
 [Service]
-Type=forking
-User={{exist_user}}
-ExecStart={{ ansible_env.JAVA_HOME }}/bin/java -Dwrapper.pidfile={{ exist_path }}/tools/yajsw/work/wrapper.eXist-db.pid -Dwrapper.service=true -Dwrapper.visible=false -Djna_tmpdir={{exist_home}}/tmp -jar {{ exist_path }}/tools/yajsw/wrapper.jar -tx {{ exist_path }}/tools/yajsw/conf/wrapper.conf
-ExecStop={{ ansible_env.JAVA_HOME }}/bin/java -Dwrapper.pidfile={{ exist_path }}/tools/yajsw/work/wrapper.eXist-db.pid -Dwrapper.service=true -Dwrapper.visible=false -Djna_tmpdir={{exist_home}}/tmp -jar {{ exist_path }}/tools/yajsw/wrapper.jar -px {{ exist_path }}/tools/yajsw/conf/wrapper.conf
+User={{ exist_instuser }}
+
+ExecStart={{ exist_path }}/contrib/service.sh
+ExecStop=/usr/bin/pkill -fu {{ exist_instuser }} "{{ exist_instname }} org.codehaus"
 Restart=on-abort
-StandardOutput=null
+#StandardOutput=null
 
 [Install]
 WantedBy=multi-user.target

@@ -1,46 +1,84 @@
 ---
 ## Install exist-db from source (git + build)
 
-# this only to simplify conditionals below
-- name: Set fact whether eXist is installed
-  set_fact:
-    exist_is_installed: "{{ ansible_local['exist'][exist_suffix]['exist_installed'] }}"
-
 - name: Determine git branch revision
-  shell: "cd {{ exist_path }}; git show-ref -s --abbrev --heads {{ exist_repo_version }} || true"
+  shell: "cd {{ exist_srcpath }}; git show-ref -s --abbrev --heads {{ exist_repo_version }} || true"
+  check_mode: false
   register: git_revision
+  tags:
+    - install
+    - src-install
 
 - name: Set fact whether to replace an installed eXist
   set_fact:
     exist_replace_installation: yes
   # if exist is installed AND the archive revision is different from installed
   when:
-    - exist_is_installed
-    - git_revision.stdout != ansible_local['exist'][exist_suffix]['exist_revision']
+    - exist_is_installed|bool
+    - git_revision.stdout != ansible_local[exist_instname]['exist_revision']
+  tags:
+    - install
+    - src-install
 
 - name: Debug1
   debug:
-    msg: "installed: {{ exist_is_installed }} running: {{ ansible_local['exist'][exist_suffix]['exist_running'] }} gitsrc: {{ ansible_local['exist'][exist_suffix]['exist_gitsrc'] }} rev: {{ ansible_local['exist'][exist_suffix]['exist_revision'] }} git_rev: {{ git_revision.stdout }} replace: {{ exist_replace_installation }}"
+    msg: "installed: {{ exist_is_installed }} running: {{ exist_is_running }} gitsrc: {{ exist_current_gitsrc }} rev: {{ exist_current_revision }} replace: {{ exist_replace_installation }}"
+  tags:
+    - install
+    - src-install
 
 - name: Include stop and backup tasks if installing a different eXist
   include_tasks: stop-and-backup.yml
-  when: exist_replace_installation
+  when: exist_replace_installation|bool
+  tags:
+    - always
+
+- name: Pre-create src dir to ensure permissions are correct
+  file:
+    dest: '{{ exist_srcpath}}'
+    state: directory
+    owner: '{{ exist_instuser }}'
+    group: '{{ exist_group }}'
+  tags:
+    - install
+    - src-install
 
 - name: Clone eXist into configured directory
-  become_user: "{{ exist_user }}"
+  become_user: "{{ exist_instuser }}"
   git:
     repo: "{{ exist_repo }}"
-    dest: "{{ exist_path }}"
+    dest: "{{ exist_srcpath }}"
     version: "{{ exist_repo_version }}"
     #refspec: origin
     refspec: "{{ exist_repo_refspec }}"
     force: "{{ exist_repo_force }}"
     update: "{{ exist_repo_update }}"
-  when: not exist_is_installed or exist_replace_installation
+  when: not exist_is_installed|bool or exist_replace_installation|bool
+  tags:
+    - install
+    - src-install
 
-- name: Build/rebuild eXist
-  become_user: "{{ exist_user }}"
-  shell: "./build.sh clean clean-all && ./build.sh >build.log 2>&1"
-  args:
-    chdir: "{{ exist_path }}"
-  when: not exist_is_installed or exist_replace_installation
+- name: Try to patch eXist git checkout, don't fail on errors
+  become_user: "{{ exist_instuser }}"
+  patch:
+    src: "{{ item }}"
+    basedir: "{{ exist_srcpath }}"
+    strip: 1
+  ignore_errors: true
+  with_items:
+  - exist-db-maven-repo-osgeo.patch
+  tags:
+    - install
+    - src-install
+
+- name: Include build tasks (4.x)
+  include_tasks: build-v4.yml
+  when: exist_major_version == 4
+  tags:
+    - always
+
+- name: Include build tasks (5.x)
+  include_tasks: build-v5.yml
+  when: exist_major_version == 5
+  tags:
+    - always

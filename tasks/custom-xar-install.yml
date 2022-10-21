@@ -1,43 +1,66 @@
 ---
 ## this is called from main.yml ONLY IF exist_install_custom_xars is true
 
-- name: Remove default autodeploy files (custom xar installation)
-  file:
-    path: "{{ exist_path }}/autodeploy"
-    state: absent
-
 - name: Ensure xar deploy dir is present (custom xar installation)
   file:
     path: "{{ exist_path }}/xars"
     state: directory
-    owner: "{{ exist_user }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0755
+    mode: 0700
+  tags:
+    - install
+    - xar-install
+
+- name: Move xar_install to xar_install2
+  set_fact:
+    xar_install2: "{{ query('vars', 'xar_install') }}"
+    xar_install: []
+  tags:
+    - install
+    - xar-install
+
+- name: Create xar_install.name if empty
+  set_fact:
+    xar_install: "{{ xar_install|default([]) + [ { 'name': item.src_archive_name|default('asdf') + item.target_archive_suffix|default('asdf') + '.' + item.src_archive_ext|default('xar') } | combine(item) ] }}"
+  with_items: "{{ xar_install2 }}"
+  tags:
+    - install
+    - xar-install
 
 - name: Prepare remote xars to install (custom xar installation)
   get_url:
-    url: "{{ exist_xarbaseurl }}/{{ item }}"
-    dest: "{{ exist_path }}/xars/{{ item }}"
-    owner: "{{ exist_user }}"
+    #url: "{{ ansible_local[exist_instname]['exist_custom']['xar-default']['uri'] if item.uri == '_' else item.uri }}/{{ item.name }}"
+    url: "{{ xar_default.uri if item.uri == '_' else item.uri }}/{{ item.name }}"
+    dest: "{{ exist_path }}/xars/{{ item.name }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-  with_items: "{{ exist_remote_xars }}"
+  #with_items: "{{ ansible_local[exist_instname]['exist_custom']['xar-install'] }}"
+  with_items: "{{ xar_install }}"
+  when: item.uri is defined
+  tags:
+    - install
+    - xar-install
 
 - name: Prepare local xars to install (custom xar installation)
   copy:
-    src: "{{ exist_xarprivdir }}/{{ item }}"
-    dest: "{{ exist_path }}/xars/{{ item }}"
-    owner: "{{ exist_user }}"
+    #src: "{{ ansible_local[exist_instname]['exist_custom']['xar-default']['path'] if item.path == '_' else item.path }}/{{ item.name }}"
+    src: "{{ xar_default.path if item.path == '_' else item.path }}/{{ item.name }}"
+    dest: "{{ exist_path }}/xars/{{ item.name }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-  with_items: "{{ exist_local_xars }}"
+    remote_src: "{{ item.remote_src | default(xar_default.remote_src|default('no')) }}"
+  #with_items: "{{ ansible_local[exist_instname]['exist_custom']['xar-install'] }}"
+  with_items: "{{ xar_install }}"
+  when:
+    - item.path is defined
+  tags:
+    - install
+    - xar-install
 
 - name: Set fact for list of xars to install (custom xar installation)
   set_fact:
-    xarlist: "{{ exist_remote_xars + exist_local_xars }}"
-
-- name: Prepare install-xars.xql.j2 from template (custom xar installation)
-  template:
-    src: install-xars.xql.j2
-    dest: "{{ exist_path }}/install-xars.xql"
-    owner: "{{ exist_user }}"
-    group: "{{ exist_group }}"
-    mode: 0755
+    exist_custom_xarlist: "{{ xar_install | map(attribute='name') | list | default([]) }}"
+  tags:
+    - install
+    - xar-install

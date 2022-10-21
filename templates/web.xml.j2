@@ -116,7 +116,7 @@
 		-->
         <init-param>
             <param-name>hidden</param-name>
-            <param-value>{{exist_webxml_initparam_hidden}}</param-value>
+            <param-value>{% if exist_webxml_initparam_hidden|bool is sameas true %}true{% else %}false{% endif %}</param-value>
         </init-param>
 
         <!--
@@ -139,7 +139,7 @@
         -->
         <init-param>
             <param-name>xquery-submission</param-name>
-            <param-value>enabled</param-value>
+            <param-value>authenticated</param-value>
         </init-param>
 
         <!--
@@ -161,7 +161,7 @@
         -->
         <init-param>
             <param-name>xupdate-submission</param-name>
-            <param-value>enabled</param-value>
+            <param-value>disabled</param-value>
         </init-param>
 
 
@@ -293,7 +293,7 @@
     </servlet>
 
     <!--
-	<servlet>
+    <servlet>
         <servlet-name>OAuthServlet</servlet-name>
         <servlet-class>org.exist.security.realm.oauth.OAuthServlet</servlet-class>
     </servlet>
@@ -318,22 +318,26 @@
     <!--
         betterFORM servlets
     -->
+    <!--
     <servlet>
-      <servlet-name>ResourceServlet</servlet-name>
-      <servlet-class>de.betterform.agent.web.resources.ResourceServlet</servlet-class>
-      <init-param>
-         <param-name>caching</param-name>
-         <param-value>true</param-value>
-      </init-param>
-   </servlet>
+        <servlet-name>ResourceServlet</servlet-name>
+        <servlet-class>de.betterform.agent.web.resources.ResourceServlet</servlet-class>
+        <init-param>
+            <param-name>caching</param-name>
+            <param-value>true</param-value>
+        </init-param>
+    </servlet>
+    -->
     
     <!--
         betterFORM servlet mappings
     -->
+    <!--
     <servlet-mapping>
-      <servlet-name>ResourceServlet</servlet-name>
-      <url-pattern>/bfResources/*</url-pattern>
-   </servlet-mapping>
+        <servlet-name>ResourceServlet</servlet-name>
+        <url-pattern>/bfResources/*</url-pattern>
+    </servlet-mapping>
+    -->
 
 
     <!--

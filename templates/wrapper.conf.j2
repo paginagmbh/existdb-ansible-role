@@ -7,7 +7,7 @@
 # Java Executable Properties
 #********************************************************************
 # Java Application
-wrapper.java.command={{ ansible_env.JAVA_HOME }}/bin/java
+wrapper.java.command={{ exist_java_home }}/bin/java
 
 # or define conditions for YAJSW searching for a JVM
 # currently only valid for windows
@@ -76,7 +76,7 @@ wrapper.java.app.mainclass=org.exist.yajsw.Main
 #     <group>\<user> (note: use \\ in configuration file).
 #     If no group is configured default group of the user is used
 #********************************************************************
-wrapper.app.account={{ exist_user }}
+wrapper.app.account={{ exist_instuser }}
 #wrapper.app.password=
 
 #********************************************************************
@@ -86,7 +86,7 @@ wrapper.app.account={{ exist_user }}
 # Java Classpath (include wrapper.jar)  Add class path elements as
 #  needed starting from 1
 # YAJSW: all libs required by YAJSW are in the manifest of the wrapper.jar -> only classpath of your application is required
-wrapper.java.classpath.1={{ exist_path }}/tools/yajsw/classes
+wrapper.java.classpath.1={{ exist_path }}/tools/yajsw/{{ exist_wrapper_relclasspath }}
 wrapper.java.classpath.2=start.jar
 
 # Java Library Path
@@ -97,32 +97,60 @@ wrapper.java.library.path.1=lib
 wrapper.java.additional.1=-Dfile.encoding=UTF-8
 wrapper.java.additional.2=-Dexist.home=.
 wrapper.java.additional.3=-Djetty.home=tools/jetty
+{% if exist_http_host is defined %}
+wrapper.java.additional.12=-Djetty.http.host={{ exist_http_host }}
+{% else %}
+#wrapper.java.additional.12=-Djetty.http.host=
+{% endif %}
+{% if exist_ssl_host is defined %}
+wrapper.java.additional.13=-Djetty.ssl.host={{ exist_ssl_host }}
+{% else %}
+#wrapper.java.additional.13=-Djetty.ssl.host=
+{% endif %}
+{% if exist_http_port > 0 %}
 wrapper.java.additional.14=-Djetty.port={{ exist_http_port }}
+{% else %}
+#wrapper.java.additional.14=-Djetty.port=
+{% endif %}
+{% if exist_ssl_port > 0 %}
 wrapper.java.additional.15=-Djetty.ssl.port={{ exist_ssl_port }}
+{% else %}
+#wrapper.java.additional.15=-Djetty.ssl.port=
+{% endif %}
 # log4j configuration is read from the conf directory of the wrapper
 wrapper.java.additional.4=-Dlog4j.configurationFile=file:tools/yajsw/conf/log4j2.xml
 # force headless mode
 wrapper.java.additional.5=-Djava.awt.headless=true
 # GC settings
 wrapper.java.additional.6=-XX:+UseG1GC
-wrapper.java.additional.7=-XX:MaxGCPauseMillis=200
+wrapper.java.additional.7=-XX:MaxGCPauseMillis={{ exist_mem_g1gc_pausegoal }}
+wrapper.java.additional.16=-XX:MaxMetaspaceSize={{ exist_mem_max_meta }}m
+wrapper.java.additional.17=-XX:MaxDirectMemorySize={{ exist_mem_max_direct }}m
 # set tmpdir
 wrapper.java.additional.8=-Djava.io.tmpdir={{ exist_home }}/tmp
 
 # GC logging/debugging
-{% if exist_wrapper_gcdebug_enable == True %}
+{% if exist_mem_gcdebug_enable|bool is sameas true %}
 wrapper.java.additional.9=-XX:+PrintGCDetails
+{% if java_provider is defined and java_provider == 'Oracle' %}
 wrapper.java.additional.10=-XX:+PrintGCDateStamps
-wrapper.java.additional.11=-Xloggc:{{ exist_path }}/webapp/WEB-INF/logs/gc.log
+{% endif %}
+wrapper.java.additional.11=-Xloggc:{{ exist_logdir }}/gc-%t.log
 {% endif %}
 
-# JMX monitoring support
-{% if exist_wrapper_jmx_enable == True %}
-wrapper.java.additional.12=-Dcom.sun.management.jmxremote
-wrapper.java.jmx=true
-wrapper.java.additional.jmx.1=-Dcom.sun.management.jmxremote.port={{ exist_wrapper_jmx_port }}
-wrapper.java.additional.jmx.2=-Dcom.sun.management.jmxremote.authenticate=false
-wrapper.java.additional.jmx.3=-Dcom.sun.management.jmxremote.ssl=false
+# String deduplication
+{% if exist_mem_strdedup_enable|bool is sameas true %}
+wrapper.java.additional.21=-XX:+UseStringDeduplication
+{% if java_provider is defined and java_provider == 'Oracle' %}
+wrapper.java.additional.22=-XX:+PrintStringDeduplicationStatistics
+{% endif %}
+{% endif %}
+
+# NMT cannot be used with the wrapper
+
+# Java NIO cache tuning (256k)
+{% if exist_mem_niocachetune_enable|bool is sameas true %}
+wrapper.java.additional.20=-Djdk.nio.maxCachedBufferSize=262144
 {% endif %}
 
 # Application parameters.  Add parameters as needed starting from 1
@@ -131,14 +159,14 @@ wrapper.app.parameter.2=tools/jetty/etc/standard.enabled-jetty-configs
 
 # Initial Java Heap Size (in MB)
 # alternative for wrapper.java.additional.<n>=-Xms
-wrapper.java.initmemory=512
+wrapper.java.initmemory={{ exist_mem_init_heap }}
 
 # % of total RAM
 #wrapper.java.initmemory.relative=10
 
 # Maximum Java Heap Size (in MB)
 # alternative for wrapper.java.additional.<n>=-Xmx
-wrapper.java.maxmemory={{ exist_wrapper_max_mem }}
+wrapper.java.maxmemory={{ exist_mem_max_heap }}
 
 # % of total RAM
 #wrapper.java.maxmemory.relative=30
@@ -162,7 +190,7 @@ wrapper.java.maxmemory={{ exist_wrapper_max_mem }}
 wrapper.console.loglevel=INFO
 
 # Log file to use for wrapper output logging.
-wrapper.logfile={{ exist_path }}/webapp/WEB-INF/logs/wrapper.log
+wrapper.logfile={{ exist_logdir }}/wrapper.log
 
 # Format of output for the log file.  (See docs for formats)
 #wrapper.logfile.format=LPTM
@@ -282,8 +310,7 @@ wrapper.on_exit.default=SHUTDOWN
 # eventl. change port and server name
 #********************************************************************
 # Enable wrapper JMX
-{% if exist_wrapper_jmx_enable == True %}
-wrapper.jmx = true
+wrapper.jmx = false
 
 # JMX RMI port. default is 1099
 #wrapper.jmx.rmi.port =
@@ -292,7 +319,6 @@ wrapper.jmx = true
 # mandatory if accessing from remote server
 #wrapper.jmx.rmi.user =
 #wrapper.jmx.rmi.password =
-{% endif %}
 
 #********************************************************************
 # Wrapper timeouts

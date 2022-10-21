@@ -1,111 +1,392 @@
 ---
-- name: Install eXist-DB init script (SysV init)
+- name: Re-gather facts
+  setup:
+  tags:
+    - config
+
+- name: Ensure instance directory for utilities exists
+  file:
+    dest: "{{ exist_path }}/contrib"
+    state: directory
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: 0700
+  tags:
+    - config
+
+- name: Install eXist-DB custom Java options file (5.x)
+  template:
+    src: exist.java.options.j2
+    dest: "{{ exist_path }}/contrib/exist.java.options"
+    mode: 0600
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  when: exist_major_version == 5
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist5
+
+- name: Install eXist-DB service startup script (5.x)
+  template:
+    src: service.sh.j2
+    dest: "{{ exist_path }}/contrib/service.sh"
+    mode: 0700
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  when: exist_major_version == 5
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist5
+
+# init script calling YAJSW wrapper
+- name: Install eXist-DB init script (SysV init, 4.x)
+  template:
+    src: eXist-db.init-v4.j2
+    dest: "{{ exist_path }}/contrib/{{ exist_instname }}.init"
+    mode: 0700
+  when: exist_major_version == 4 and ansible_service_mgr != "systemd"
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist4
+
+# init script calling contrib/service.sh
+- name: Install eXist-DB init script (SysV init, 5.x)
   template:
     src: eXist-db.init.j2
-    dest: "/etc/init.d/{{ exist_servicename }}"
-    mode: 0755
+    dest: "{{ exist_path }}/contrib/{{ exist_instname }}.init"
+    mode: 0700
+  when: exist_major_version == 5 and ansible_service_mgr != "systemd"
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist5
+
+# systemd service file calling YAJSW wrapper
+- name: Install eXist-DB service file (systemd, 4.x)
+  template:
+    src: eXist-db.systemd-v4.j2
+    dest: "{{ exist_path }}/contrib/{{ exist_instname }}.service"
+    mode: 0600
+  when: exist_major_version == 4 and ansible_service_mgr == "systemd"
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist4
+
+# systemd service file calling contrib/service.sh
+- name: Install eXist-DB service file (systemd, 5.x)
+  template:
+    src: eXist-db.systemd.j2
+    dest: "{{ exist_path }}/contrib/{{ exist_instname }}.service"
+    mode: 0600
+  when: exist_major_version == 5 and ansible_service_mgr == "systemd"
+  notify:
+    - restart eXist
+  tags:
+    - config
+    - exist5
+
+- name: Symlink eXist-DB init script (SysV init)
+  file:
+    src: "{{ exist_path }}/contrib/{{ exist_instname }}.init"
+    dest: "/etc/init.d/{{ exist_instname }}"
+    state: link
   when: ansible_service_mgr != "systemd"
   notify:
     - restart eXist
+  tags:
+    - config
 
-- name: Install eXist-DB service file (systemd)
-  template:
-    src: eXist-db.systemd.j2
-    dest: "/etc/systemd/system/{{ exist_servicename }}.service"
-    mode: 0644
+- name: Symlink eXist-DB service file (systemd)
+  copy:
+    remote_src: yes
+    src: "{{ exist_path }}/contrib/{{ exist_instname }}.service"
+    dest: "/etc/systemd/system/{{ exist_instname }}.service"
   when: ansible_service_mgr == "systemd"
   notify:
     - restart eXist
+  tags:
+    - config
+
+# to initialize new systemd service files (using a handler runs too late)
+- name: Reload systemd
+  command: "systemctl daemon-reload"
+  when: ansible_service_mgr == "systemd"
+  tags:
+    - config
+
+- name: Install instance util scripts from files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ exist_path }}/contrib/{{ item }}"
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: 0700
+  with_items:
+    - upload-xmlrpc.pl
+    - upload-xmlrpc.py
+  tags:
+    - config
+
+- name: Hardlink upload-xmlrpc.pl to execute-xmlrpc.pl
+  file:
+    src: "{{ exist_path }}/contrib/upload-xmlrpc.pl"
+    dest: "{{ exist_path }}/contrib/execute-xmlrpc.pl"
+    state: hard
+    force: yes
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  tags:
+    - config
+
+- name: Hardlink upload-xmlrpc.py to execute-xmlrpc.py
+  file:
+    src: "{{ exist_path }}/contrib/upload-xmlrpc.py"
+    dest: "{{ exist_path }}/contrib/execute-xmlrpc.py"
+    state: hard
+    force: yes
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  tags:
+    - config
+
+- name: Install util scripts from templates
+  template: 
+    src: "{{ item }}.j2"
+    dest: "{{ exist_path }}/contrib/{{ item }}"
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: 0700
+  with_items:
+    - exist-filebased-backup.sh
+    - exist-filebased-restore.sh
+    - exist-clientside-backup.sh
+    - exist-serverside-backup.sh
+    - common-shfuncs.sh
+  tags:
+    - config
+
+- name: Install logrotate config from templates
+  template:
+    src: "logrotate.j2"
+    dest: "{{ exist_path }}/contrib/logrotate"
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  when: exist_log_retention_days > 0
+  tags:
+    - config
+
+- name: Symlink logrotate config into /etc/logrotate.d
+  file:
+    src: "{{ exist_path }}/contrib/logrotate"
+    dest: "/etc/logrotate.d/{{ exist_instname }}"
+    state: link
+  when: exist_log_retention_days > 0
+  tags:
+    - config
 
 ## setup config files before startup
 
-- name: Setup wrapper conf from template
+- name: Setup wrapper conf from template (4.x)
   template:
     src: wrapper.conf.j2
-    dest: "{{ exist_path }}/tools/yajsw/conf/wrapper.conf"
-    owner: "{{ exist_user }}"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['wrapper_conf'] }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
-  when: exist_wrapperconf_from_template
+    mode: 0600
+  when: exist_major_version == 4 and exist_wrapperconf_from_template
   notify:
     - restart eXist
+  tags:
+    - config
+    - exist4
 
 - name: Setup logging conf from template
   template:
     src: log4j2.xml.j2
-    dest: "{{ exist_path }}/tools/yajsw/conf/log4j2.xml"
-    owner: "{{ exist_user }}"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['log4j2_xml'] }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
-  when: exist_logconf_from_template
+    mode: 0600
+  when: exist_logconf_from_template|bool
   notify:
     - restart eXist
+  tags:
+    - config
 
 - name: Setup eXist conf.xml from template
   template: 
-    src: conf.xml.j2
-    dest: "{{ exist_path }}/conf.xml"
-    owner: "{{ exist_user }}"
+    src: "conf_{{ exist_major_version }}.xml.j2"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['conf_xml'] }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
-  when: exist_confxml_from_template
+    mode: 0600
+  when: exist_confxml_from_template|bool
   notify:
     - restart eXist
+  tags:
+    - config
 
 - name: Setup eXist web.xml from template
   template:
     src: web.xml.j2
-    dest: "{{ exist_path }}/webapp/WEB-INF/web.xml"
-    owner: "{{ exist_user }}"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['web_xml'] }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
-  when: exist_webxml_from_template
+    mode: 0600
+  when: exist_webxml_from_template|bool
   notify:
     - restart eXist
+  tags:
+    - config
 
 - name: Setup eXist client.properties from template
   template: 
     src: client.properties.j2
-    dest: "{{ exist_path }}/client.properties"
-    owner: "{{ exist_user }}"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['client_properties'] }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
-  when: exist_clientprops_from_template
+    mode: 0600
+  when: exist_clientprops_from_template|bool
   notify:
     - restart eXist
+  tags:
+    - config
+
+- name: Setup Jetty standard.enabled-jetty-configs file from template
+  template: 
+    src: standard.enabled-jetty-configs.j2
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['jetty_etc'] }}/standard.enabled-jetty-configs"
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: 0600
+  when: exist_jettyconf_from_template|bool
+  notify:
+    - restart eXist
+  tags:
+    - config
+
+- name: Set http.host in Jetty configs
+  lineinfile:
+    path: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['jetty_etc'] }}/jetty-http.xml"
+    regexp: '<Set name="host"><Property name="jetty.http.host"'
+    line: '        <Set name="host"><Property name="jetty.http.host" deprecated="jetty.host"><Default><SystemProperty name="jetty.http.host"/></Default></Property></Set>'
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: '0600'
+  when:
+    - exist_http_host is defined
+    - exist_jettyconf_from_template|bool
+  tags:
+    - config
+
+- name: Set ssl.host in Jetty configs
+  lineinfile:
+    path: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['jetty_etc'] }}/jetty-ssl.xml"
+    regexp: '<Set name="host"><Property name="jetty.ssl.host"'
+    line: '        <Set name="host"><Property name="jetty.ssl.host" deprecated="jetty.host"><Default><SystemProperty name="jetty.ssl.host"/></Default></Property></Set>'
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+    mode: '0600'
+  when:
+    - exist_ssl_host is defined
+    - exist_jettyconf_from_template|bool
+  tags:
+    - config
 
 #- name: Debug2
 #  debug:
-#    msg: "installed: {{ ansible_local['exist'][exist_suffix]['exist_installed'] }} running: {{ ansible_local['exist'][exist_suffix]['exist_running'] }} gitsrc: {{ ansible_local['exist'][exist_suffix]['exist_gitsrc'] }} rev: {{ ansible_local['exist'][exist_suffix]['exist_revision'] }} archive_rev: {{ archive_revision.stdout }} replace: {{ exist_replace_installation }}"
+#    msg: "installed: {{ ansible_local[exist_instname]['exist_installed'] }} running: {{ ansible_local[exist_instname]['exist_running'] }} gitsrc: {{ ansible_local[exist_instname]['exist_gitsrc'] }} rev: {{ ansible_local[exist_instname]['exist_revision'] }} archive_rev: {{ archive_revision.stdout }} replace: {{ exist_replace_installation }}"
+#  tags:
+#    - config
 
 - name: Restore data directory from previous installation
   synchronize: 
-    src: "{{ exist_home }}/backup/last/exist/webapp/WEB-INF/data"
-    dest: "{{ exist_path }}/webapp/WEB-INF/"
+    src: "{{ exist_home }}/backup/{{ exist_instuser }}/{{ exist_instname }}.last/{{ exist_instname }}/{{ exist_confpaths[exist_major_version]['data_basedir'] }}/data"
+    dest: "{{ exist_path }}/{{ exist_confpaths[exist_major_version]['data_basedir'] }}"
   delegate_to: "{{ inventory_hostname }}"
   when:
-    - exist_replace_installation
-    - exist_restore_prevdata
+    - exist_replace_installation|bool
+    - exist_restore_prevdata|bool
+  tags:
+    - restore
+
+# a freshly installed does not have the exist_data directory until started for
+# the first time, but the jmxservlet tasks below require this dir
+- name: Ensure exist_datadir directory is present
+  file:
+    path: '{{ exist_datadir }}'
+    state: directory
+    owner: '{{ exist_instuser }}'
+    group: '{{ exist_group }}'
+  tags:
+    - config
 
 # if jmxservlet.token file is present, register jmxtoken_file var,
 # so we can check whether the token was already created
 - name: Check whether token has already been created
   stat:
-    path: "{{ exist_path }}/webapp/WEB-INF/data/jmxservlet.token"
+    path: "{{ exist_datadir }}/jmxservlet.token"
   register: jmxtoken_file
+  tags:
+    - config
 
 - name: Generate uuid for JMX token
   command: uuidgen
   register: uuidgen
   when: not jmxtoken_file.stat.exists
+  tags:
+    - config
 
 - name: Setup JMX token from template
   template:
     src: jmxservlet.token.j2
-    dest: "{{ exist_path }}/webapp/WEB-INF/data/jmxservlet.token"
-    owner: "{{ exist_user }}"
+    dest: "{{ exist_datadir }}/jmxservlet.token"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0644
+    mode: 0600
   when: not jmxtoken_file.stat.exists
   notify:
     - restart eXist
+  tags:
+    - config
+
+- name: Extract system.properties file for use with Ansible fact script
+  shell: "unzip -qjd {{ exist_path }}/etc {{ exist_path }}/lib/exist-core*jar org/exist/system.properties; chown {{ exist_instuser }}:{{ exist_group }} {{ exist_path }}/etc/system.properties"
+  args:
+    creates: "{{ exist_path }}/etc/system.properties"
+    # don't nag to use Ansible unarchive instead
+    warn: no
+  when: exist_major_version == 5
+  tags:
+    - config
+    - exist5
+
+- name: Create instance description file
+  template:
+    src: 'DESCRIPTION.instance.j2'
+    dest: '{{ exist_path }}/contrib/DESCRIPTION.md'
+    owner: "{{ exist_instuser }}"
+    group: "{{ exist_group }}"
+  tags:
+    - config
+    - userdoc
+
+- name: Ensure privacy on instance directory tree
+  file:
+    path: '{{ exist_path }}'
+    state: directory
+    recurse: yes
+    owner: '{{ exist_instuser }}'
+    group: '{{ exist_group }}'
+    mode: 'go-rwx'
+  tags:
+    - config

@@ -1,30 +1,106 @@
 ---
+- name: Gather facts
+  setup:
+  tags: always
+
+- name: Get exist_java_home from ansible facts
+  set_fact:
+    exist_java_home: "{{ ansible_local.java.java_home }}"
+  when: "( ( exist_java_home is not defined ) and ( ( ansible_local.java is defined ) and ( ansible_local.java.java_home is defined ) ) )"
+  tags: always
+
+- name: Get exist_java_home from environment
+  set_fact:
+    exist_java_home: "{{ ansible_env.JAVA_HOME }}"
+  when: "( ( exist_java_home is not defined ) and ( ( ansible_env is defined ) and ( ansible_env.JAVA_HOME is defined ) ) )"
+  tags: always
+
+- fail:
+    msg: Java not found
+  when: exist_java_home is not defined
+  tags: always
+
 - name: Set facts for this exist instance
   set_fact:
-    exist_path: "{{ exist_home }}/{{ exist_dir }}{{ exist_suffix }}"
-    exist_instname: "{{ exist_dir }}{{ exist_suffix }}"
-    exist_servicename: "{{ exist_service }}{{ exist_suffix }}"
+    exist_path: "{{ exist_home }}/{{ exist_instname }}"
+    exist_datadir: "{{ exist_home }}/{{ exist_instname }}/{{ exist_confpaths[exist_major_version]['data_basedir'] }}/data"
+    exist_logdir: "{{ exist_home }}/{{ exist_instname }}/{{ exist_confpaths[exist_major_version]['log_dir'] }}"
+  tags: always
+
+- name: Set srcpath fact (4.x)
+  set_fact:
+    exist_srcpath: '{{ exist_home }}/{{ exist_dir }}'
+  when: exist_major_version == 4
+  tags: always
+
+- name: Set srcpath fact (5.x)
+  set_fact:
+    exist_srcpath: '{{ exist_home }}/{{ exist_dir }}-v5source'
+  when: exist_major_version == 5
+  tags: always
+
+- name: Debug0
+  debug:
+    msg: 'exist_path: {{ exist_path }} exist_instname: {{ exist_instname }} exist_instuser: {{ exist_instuser }}'
+  tags: always
 
 - name: Include user setup tasks
   include_tasks: setup-user.yml
+  tags: always
 
 - name: Include pre-installation tasks
   include_tasks: preinstall.yml
+  tags: always
+
+- name: Set defaults if no facts are known a about this eXist instance
+  set_fact:
+    exist_is_installed: false
+    exist_is_running: false
+    exist_current_gitsrc: false
+    exist_current_revision: ""
+    exist_replace_installation: false
+  when: exist_instname not in ansible_local
+  tags: always
+
+- name: Set facts for this eXist instance
+  set_fact:
+    exist_is_installed: "{{ ansible_local[exist_instname]['exist_installed'] }}"
+    exist_is_running: "{{ ansible_local[exist_instname]['exist_running'] }}"
+    exist_current_gitsrc: "{{ ansible_local[exist_instname]['exist_gitsrc'] }}"
+    exist_current_revision: "{{ ansible_local[exist_instname]['exist_revision'] }}"
+    exist_replace_installation: false
+  when: exist_instname in ansible_local
+  tags: always
 
 - name: Include tasks to install exist from source
   include_tasks: install-from-source.yml
   when: exist_install_method == "source"
+  tags: always
 
 - name: Include tasks to install exist from pre-packaged archive file
   include_tasks: install-archive.yml
   when: exist_install_method == "remote_archive" or exist_install_method == "local_archive"
+  tags: always
+
+- name: Upload xar tasks
+  include_tasks: upload-xar.yml
+  when: exist_custom_install|bool
+  tags: always
+
+- name: Patch xar tasks
+  include_tasks: patch-xar.yml
+  when: exist_custom_install|bool
+  tags: always
 
 - name: Include custom xar installation tasks
   include_tasks: custom-xar-install.yml
-  when: exist_install_custom_xars
+  when: exist_custom_install|bool
+  tags: always
 
 - name: Include post-installation pre-startup tasks
   include_tasks: postinstall.yml
+  tags: always
 
 - name: Include startup exist and post-startup tasks
   include_tasks: startup.yml
+  tags: always

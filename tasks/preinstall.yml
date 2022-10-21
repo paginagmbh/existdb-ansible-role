@@ -3,84 +3,121 @@
 
 - name: Ensure required packages are installed (Debian)
   apt:
-    name: "{{ item }}"
+    #name: "{{ item }}"
+    name: "{{ exist_debian_extra_packages }}"
     state: present
-  with_items: "{{ exist_debian_extra_packages }}"
+  #with_items: "{{ exist_debian_extra_packages }}"
   when: ansible_distribution == 'Debian'
+  tags:
+    - preinstall
+    - packages
 
 - name: Ensure required packages are installed (Ubuntu)
   apt:
-    name: "{{ item }}"
+    #name: "{{ item }}"
+    name: "{{ exist_ubuntu_extra_packages }}"
     state: present
-  with_items: "{{ exist_ubuntu_extra_packages }}"
+  #with_items: "{{ exist_ubuntu_extra_packages }}"
   when: ansible_distribution == 'Ubuntu'
+  tags:
+    - preinstall
+    - packages
 
 - name: Ensure required packages are installed (RedHat family)
   yum: 
-    name: "{{ item }}"
+    #name: "{{ item }}"
+    name: "{{ exist_redhat_extra_packages }}"
     state: present
-  with_items: "{{ exist_redhat_extra_packages }}"
+  #with_items: "{{ exist_redhat_extra_packages }}"
   when: ansible_os_family == 'RedHat'
+  tags:
+    - preinstall
+    - packages
 
 - name: Tune kernel parameters
   template: 
     src: "sysctl.exist.j2"
     dest: "/etc/sysctl.d/99-exist.conf"
-  when: exist_kerneltune_enable
+  when: exist_kerneltune_enable|bool
   notify:
     - reload sysctl
+  tags:
+    - preinstall
+    - kernel
 
-- name: Ensure backup and scripts dirs are present
+- name: Ensure backup and tmp dirs are present
   file:
     path: "{{ exist_home }}/{{ item }}"
     state: directory
     owner: "{{ exist_user }}"
     group: "{{ exist_group }}"
-    mode: 0751
-    recurse: yes
+    mode: 0775
   with_items:
     - backup
-    - scripts
+    - tmp
+  tags:
+    - preinstall
+    - util
 
-- name: Ensure tmp dir is present
+- name: Ensure backup dir for instance user is present
   file:
-    path: "{{ exist_home }}/tmp"
+    path: "{{ exist_home }}/backup/{{ exist_instuser }}"
     state: directory
-    owner: "{{ exist_user }}"
+    owner: "{{ exist_instuser }}"
     group: "{{ exist_group }}"
-    mode: 0775
+    mode: 0700
+  tags:
+    - preinstall
+    - util
 
-- name: Install util scripts from files
+- name: Ensure system directory for utilities exists
+  file:
+    dest: "{{ exist_system_utildir }}"
+    state: directory
+  tags:
+    - preinstall
+    - util
+
+- name: Install system util scripts from files
   copy:
     src: "{{ item }}"
-    dest: "{{ exist_home}}/scripts/{{ item }}"
-    owner: "{{ exist_user }}"
-    group: "{{ exist_group }}"
-    mode: 0751
+    dest: "{{ exist_system_utildir }}/{{ item }}"
+    mode: 0755
   with_items:
-    - upload-xmlrpc.pl
+    - psexist
+  tags:
+    - preinstall
+    - util
 
-- name: Install util scripts from templates
+- name: Install system util scripts from templates
   template: 
     src: "{{ item }}.j2"
-    dest: "{{ exist_home}}/scripts/{{ item }}"
-    owner: "{{ exist_user }}"
-    group: "{{ exist_group }}"
-    mode: 0751
+    dest: "{{ exist_system_utildir }}/{{ item }}"
+    mode: 0755
   with_items:
-    - exist-restore.sh
+    - rmexist.sh
+  tags:
+    - preinstall
+    - util
 
 - name: Ensure Ansible facts dir is present
   file:
     path: "/etc/ansible/facts.d"
     state: directory
     recurse: yes
+  tags:
+    - always
 
 - name: Install fact gathering script
   template: 
     src: exist.fact.j2
-    dest: "/etc/ansible/facts.d/exist.fact"
+    dest: '/etc/ansible/facts.d/{{ exist_instname }}.fact'
     mode: 0755
+  tags:
+    - always
 
-- name: Re-gather facts to run the fact gathering script
+- name: Re-gather facts with new fact gathering script
+  #become: yes
   setup:
+  tags:
+    - always
